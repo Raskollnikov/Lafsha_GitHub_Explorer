@@ -11,20 +11,27 @@ const HomePage = () => {
 
     const [repos,setRepos] = useState([])
     const [loading,setLoading]=useState(false);
+    const [sortType, setSortType] = useState("recent");
 
 
     const getUserProfileAndRepos = useCallback(async (username = "Raskollnikov") => {
         setLoading(true);
         try {
             // Fetch user profile
-            const userRes = await fetch(`https://api.github.com/users/${username}`);
+            const userRes = await fetch(`https://api.github.com/users/${username}`,{
+                headers:{
+                    authorization:`token ${import.meta.env.VITE_GITHUB_API_KEY}`
+                }
+            });
             if (!userRes.ok) throw new Error("Failed to fetch user profile.");
             const userProfile = await userRes.json();
     
             // Fetch repos
-            const reposRes = await fetch(`https://api.github.com/users/${username}/repos`);
+            const reposRes = await fetch(userProfile.repos_url);
             if (!reposRes.ok) throw new Error("Failed to fetch repositories.");
             const repos = await reposRes.json();
+
+            repos.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
     
             setUserProfile(userProfile);
             setRepos(repos);
@@ -42,13 +49,43 @@ const HomePage = () => {
 		getUserProfileAndRepos();
 	}, [getUserProfileAndRepos]);
 
+    const searchFunction=async(e,userName)=>{ 
+        e.preventDefault();
+        setLoading(true)
+        setRepos([]);
+        setUserProfile(null)
+
+        const {userProfile,repos}=await getUserProfileAndRepos(userName)
+        setUserProfile(userProfile)
+        setRepos(repos)
+
+        setLoading(false)
+
+        setSortType('recent')
+    }
+
+
+    const onSort=(sortType)=>{
+        if(sortType==='recent'){
+            repos.sort((a,b)=>new Date(b.created_at) - new Date(a.created_at))
+        }else if(sortType==='stars'){
+            repos.sort((a,b)=>b.stargazers_count - a.stargazers_count)
+        }else if(sortType==='forks'){
+            repos.sort((a,b)=>b.forks_count - a.forks_count)
+        }
+        setSortType(sortType)
+        setRepos([...repos])
+    };
+
     return (
     <div className="m-4">
-        <Search/>
-        <SortRepos/>
+        <Search searchFunction={searchFunction}/>
+        
+        {repos.length>0&&<SortRepos onSort={onSort} sortType={sortType}/>}
+        
         <div className="flex gap-4 flex-col lg:flex-row justify-center items-start">
             {userProfile && !loading &&<ProfileInfo userProfile={userProfile} />}
-            {repos.length>0&&!loading && <Repos repos={repos}/>}
+            {!loading && <Repos repos={repos}/>}
             {loading&&<Spinner/>}
         </div>
     </div>
